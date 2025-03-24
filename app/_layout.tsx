@@ -31,6 +31,9 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(onboarding)" options={{ animation: 'fade' }} />
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+        <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="community" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="milestones" options={{ animation: 'slide_from_right' }} />
       </Stack>
       <StatusBar style="auto" />
     </AuthProvider>

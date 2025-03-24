@@ -53,33 +53,6 @@ export default function TabLayout() {
       />
       
       <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <BarChart2 size={24} color={color} />,
-          tabBarButton: () => <View style={styles.hiddenTab} />
-        }}
-      />
-      
-      <Tabs.Screen
-        name="community"
-        options={{
-          title: 'Community',
-          tabBarIcon: ({ color }) => <Shield size={24} color={color} />,
-          tabBarButton: () => <View style={styles.hiddenTab} />
-        }}
-      />
-      
-      <Tabs.Screen
-        name="milestones"
-        options={{
-          title: 'Milestones',
-          tabBarIcon: ({ color }) => <User size={24} color={color} />,
-          tabBarButton: () => <View style={styles.hiddenTab} />
-        }}
-      />
-      
-      <Tabs.Screen
         name="home"
         options={{
           title: 'Home',

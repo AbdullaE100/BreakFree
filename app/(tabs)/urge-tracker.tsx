@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, TouchableOpacity } from 'react-native';
-import { Activity, MapPin, CornerDownRight, Shield, Check, X } from 'lucide-react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Activity, MapPin, CornerDownRight, Shield, Check, X, Clock, BookOpen, BarChart3, ChevronRight, RefreshCw, AlertCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../../contexts/AuthContext';
+import { Urge, createUrge, getTodaysUrges } from '../../lib/supabase';
+import UrgeHistory from '../components/UrgeHistory';
 
 // Define types for our CustomSlider
 interface CustomSliderProps {
@@ -72,13 +75,35 @@ interface TriggerOption {
   label: string;
 }
 
+interface CopingStrategy {
+  id: string;
+  title: string;
+  description: string;
+  forIntensity: 'low' | 'medium' | 'high' | 'all';
+}
+
+// Tabs for the urge tracker
+type TabType = 'track' | 'history';
+
 export default function UrgeTrackerScreen() {
-  // State management
+  const { user } = useAuth();
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabType>('track');
+  
+  // Urge form state
   const [urgeIntensity, setUrgeIntensity] = useState<number>(5);
   const [location, setLocation] = useState<string>('');
   const [trigger, setTrigger] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [overcameUrge, setOvercameUrge] = useState<boolean | null>(null);
+  const [showCopingStrategies, setShowCopingStrategies] = useState<boolean>(false);
+  const [selectedCopingStrategy, setSelectedCopingStrategy] = useState<string | null>(null);
+  
+  // Loading states
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [urges, setUrges] = useState<Urge[]>([]);
   
   // Common locations and triggers
   const commonLocations: LocationOption[] = [
@@ -87,6 +112,8 @@ export default function UrgeTrackerScreen() {
     { id: 'bed', label: 'Bed' },
     { id: 'bathroom', label: 'Bathroom' },
     { id: 'phone', label: 'On Phone' },
+    { id: 'social', label: 'Social Event' },
+    { id: 'commuting', label: 'Commuting' },
   ];
   
   const commonTriggers: TriggerOption[] = [
@@ -96,37 +123,137 @@ export default function UrgeTrackerScreen() {
     { id: 'anxiety', label: 'Anxiety' },
     { id: 'fatigue', label: 'Fatigue' },
     { id: 'social_media', label: 'Social Media' },
+    { id: 'argument', label: 'Argument' },
+    { id: 'celebration', label: 'Celebration' },
+    { id: 'exposure', label: 'Saw a trigger' },
+    { id: 'emotion', label: 'Strong Emotion' },
   ];
   
-  // Handle saving the urge data
-  const handleSave = () => {
-    const urgeData = {
-      intensity: urgeIntensity,
-      location,
-      trigger,
-      notes,
-      timestamp: new Date(),
-      overcame: overcameUrge,
-    };
+  // Coping strategies based on intensity levels
+  const copingStrategies: CopingStrategy[] = [
+    {
+      id: 'deep_breathing',
+      title: 'Deep Breathing',
+      description: 'Take 10 deep breaths, inhaling for 4 counts and exhaling for 6. Focus on the sensation of your breath.',
+      forIntensity: 'all'
+    },
+    {
+      id: 'urge_surfing',
+      title: 'Urge Surfing',
+      description: 'Observe the urge like a wave - it will rise, peak, and eventually fade. Don\'t fight it, just watch it pass.',
+      forIntensity: 'high'
+    },
+    {
+      id: 'distraction',
+      title: 'Active Distraction',
+      description: 'Engage in a different activity that requires focus - a walk, puzzle, or call a friend.',
+      forIntensity: 'medium'
+    },
+    {
+      id: 'mindfulness',
+      title: 'Mindfulness Exercise',
+      description: 'Focus on your 5 senses - name 5 things you can see, 4 you can touch, 3 you can hear, 2 you can smell, and 1 you can taste.',
+      forIntensity: 'medium'
+    },
+    {
+      id: 'cold_water',
+      title: 'Cold Water Technique',
+      description: 'Splash cold water on your face or hold an ice cube. This activates your body\'s calming response.',
+      forIntensity: 'high'
+    },
+    {
+      id: 'visualization',
+      title: 'Visualization',
+      description: 'Imagine yourself resisting the urge and feeling proud afterward. Visualize the benefits of staying on track.',
+      forIntensity: 'low'
+    },
+    {
+      id: 'delay',
+      title: 'Delay Tactic',
+      description: 'Tell yourself "I\'ll wait just 10 minutes before deciding." Then extend it another 10 minutes.',
+      forIntensity: 'high'
+    },
+    {
+      id: 'play_forward',
+      title: 'Play the Tape Forward',
+      description: 'Imagine the entire scenario if you give in - not just the immediate relief, but the aftermath of guilt and disappointment.',
+      forIntensity: 'medium'
+    },
+  ];
+  
+  // Load urges data
+  useEffect(() => {
+    if (user) {
+      loadUrges();
+    }
+  }, [user]);
+  
+  const loadUrges = async () => {
+    if (!user) return;
     
-    console.log('Saving urge data:', urgeData);
-    // Here you would normally save to state management or API
-    
-    // Reset the form
-    setUrgeIntensity(5);
-    setLocation('');
-    setTrigger('');
-    setNotes('');
-    setOvercameUrge(null);
+    try {
+      setIsLoading(true);
+      const userUrges = await getTodaysUrges(user.id);
+      setUrges(userUrges);
+    } catch (error) {
+      console.error('Error loading urges:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Activity size={24} color="#3D56F0" style={styles.headerIcon} />
-        <Text style={styles.headerTitle}>Track an Urge</Text>
-      </View>
+  // Get relevant coping strategies based on intensity
+  const getRelevantCopingStrategies = () => {
+    let intensityLevel: 'low' | 'medium' | 'high';
+    
+    if (urgeIntensity <= 3) intensityLevel = 'low';
+    else if (urgeIntensity <= 7) intensityLevel = 'medium';
+    else intensityLevel = 'high';
+    
+    return copingStrategies.filter(strategy => 
+      strategy.forIntensity === intensityLevel || strategy.forIntensity === 'all'
+    );
+  };
+  
+  // Handle saving the urge data
+  const handleSave = async () => {
+    if (!user) return;
+    
+    try {
+      setIsSaving(true);
       
+      const urgeData = {
+        intensity: urgeIntensity,
+        location,
+        trigger,
+        notes: notes + (selectedCopingStrategy ? `\nCoping strategy used: ${selectedCopingStrategy}` : ''),
+        overcome: overcameUrge === true,
+      };
+      
+      await createUrge(user.id, urgeData);
+      await loadUrges();
+      
+      // Reset the form
+      setUrgeIntensity(5);
+      setLocation('');
+      setTrigger('');
+      setNotes('');
+      setOvercameUrge(null);
+      setSelectedCopingStrategy(null);
+      setShowCopingStrategies(false);
+      
+      // Switch to history tab to see the new entry
+      setActiveTab('history');
+    } catch (error) {
+      console.error('Error saving urge:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  // Render the urge tracker form
+  const renderTrackForm = () => (
+    <ScrollView contentContainerStyle={styles.scrollContent}>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>How intense is the urge?</Text>
         
@@ -148,6 +275,54 @@ export default function UrgeTrackerScreen() {
             urgeIntensity > 7 && styles.intensityHigh
           ]} />
         </View>
+        
+        <View style={styles.intensityLabelContainer}>
+          <Text style={styles.intensityLabel}>
+            {urgeIntensity <= 3 ? 'Low' : urgeIntensity <= 7 ? 'Moderate' : 'High'} intensity
+          </Text>
+          
+          <Pressable 
+            style={styles.copingButton}
+            onPress={() => setShowCopingStrategies(!showCopingStrategies)}
+          >
+            <Shield size={16} color="#3D56F0" />
+            <Text style={styles.copingButtonText}>
+              {showCopingStrategies ? 'Hide strategies' : 'View coping strategies'}
+            </Text>
+          </Pressable>
+        </View>
+        
+        {showCopingStrategies && (
+          <View style={styles.copingStrategiesContainer}>
+            {getRelevantCopingStrategies().map(strategy => (
+              <Pressable
+                key={strategy.id}
+                style={[
+                  styles.copingStrategyCard,
+                  selectedCopingStrategy === strategy.title && styles.copingStrategyCardSelected
+                ]}
+                onPress={() => setSelectedCopingStrategy(
+                  selectedCopingStrategy === strategy.title ? null : strategy.title
+                )}
+              >
+                <View style={styles.copingStrategyHeader}>
+                  <Text style={styles.copingStrategyTitle}>{strategy.title}</Text>
+                  {selectedCopingStrategy === strategy.title && (
+                    <Check size={16} color="#10B981" />
+                  )}
+                </View>
+                <Text style={styles.copingStrategyDescription}>{strategy.description}</Text>
+              </Pressable>
+            ))}
+            
+            <View style={styles.copingStrategyTip}>
+              <AlertCircle size={14} color="#3D56F0" />
+              <Text style={styles.copingStrategyTipText}>
+                Select a strategy you'd like to try and include it in your record
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
       
       <View style={styles.card}>
@@ -270,16 +445,72 @@ export default function UrgeTrackerScreen() {
         </View>
       </View>
       
-      <Pressable style={styles.saveButton} onPress={handleSave}>
+      <Pressable 
+        style={styles.saveButton} 
+        onPress={handleSave}
+        disabled={isSaving}
+      >
         <LinearGradient
           colors={['#3D56F0', '#5B73FF']}
           style={StyleSheet.absoluteFill}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         />
-        <Text style={styles.saveButtonText}>Save Entry</Text>
+        {isSaving ? (
+          <ActivityIndicator color="#FFFFFF" size="small" />
+        ) : (
+          <Text style={styles.saveButtonText}>Save Entry</Text>
+        )}
       </Pressable>
     </ScrollView>
+  );
+  
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Activity size={24} color="#3D56F0" style={styles.headerIcon} />
+        <Text style={styles.headerTitle}>Urge Tracker</Text>
+        
+        {activeTab === 'history' && (
+          <Pressable 
+            style={styles.refreshButton}
+            onPress={loadUrges}
+          >
+            <RefreshCw size={18} color="#6B7280" />
+          </Pressable>
+        )}
+      </View>
+      
+      <View style={styles.tabContainer}>
+        <Pressable
+          style={[styles.tabButton, activeTab === 'track' && styles.activeTabButton]}
+          onPress={() => setActiveTab('track')}
+        >
+          <BookOpen size={18} color={activeTab === 'track' ? "#3D56F0" : "#6B7280"} />
+          <Text style={[styles.tabText, activeTab === 'track' && styles.activeTabText]}>
+            Track
+          </Text>
+        </Pressable>
+        
+        <Pressable
+          style={[styles.tabButton, activeTab === 'history' && styles.activeTabButton]}
+          onPress={() => setActiveTab('history')}
+        >
+          <BarChart3 size={18} color={activeTab === 'history' ? "#3D56F0" : "#6B7280"} />
+          <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>
+            History & Insights
+          </Text>
+        </Pressable>
+      </View>
+      
+      {activeTab === 'track' ? (
+        renderTrackForm()
+      ) : (
+        <View style={styles.historyContainer}>
+          <UrgeHistory urges={urges} loading={isLoading} />
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -287,13 +518,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
-    paddingTop: 60,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 24,
+    paddingTop: 60,
+    marginBottom: 16,
   },
   headerIcon: {
     marginRight: 12,
@@ -302,6 +536,39 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'Inter-Bold',
     color: '#1F2937',
+    flex: 1,
+  },
+  refreshButton: {
+    padding: 8,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  tabButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  activeTabButton: {
+    backgroundColor: '#EBF5FF',
+  },
+  tabText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#6B7280',
+    marginLeft: 8,
+  },
+  activeTabText: {
+    color: '#3D56F0',
+  },
+  historyContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -388,6 +655,77 @@ const styles = StyleSheet.create({
   },
   intensityHigh: {
     backgroundColor: '#EF4444',
+  },
+  intensityLabelContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  intensityLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#4B5563',
+  },
+  copingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  copingButtonText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#3D56F0',
+    marginLeft: 6,
+  },
+  copingStrategiesContainer: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 16,
+  },
+  copingStrategyCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  copingStrategyCardSelected: {
+    borderColor: '#3D56F0',
+    backgroundColor: '#EBF5FF',
+  },
+  copingStrategyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  copingStrategyTitle: {
+    fontSize: 15,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+  },
+  copingStrategyDescription: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#4B5563',
+    lineHeight: 20,
+  },
+  copingStrategyTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EBF5FF',
+    borderRadius: 6,
+    padding: 10,
+    marginTop: 6,
+  },
+  copingStrategyTipText: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: '#4B5563',
+    marginLeft: 8,
+    flex: 1,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -483,6 +821,9 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     borderRadius: 12,
     overflow: 'hidden',
+    height: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   saveButtonText: {
     textAlign: 'center',

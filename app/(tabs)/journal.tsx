@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert } from 'react-native';
-import { Calendar, ChevronLeft, ChevronRight, BookOpen, Star, Plus, ArrowLeft, PenSquare, Brain, Heart, RefreshCw, Award, CheckCircle, AlertTriangle, Lightbulb, Zap } from 'lucide-react-native';
+import { Calendar, ChevronLeft, ChevronRight, BookOpen, Star, Plus, ArrowLeft, PenSquare, Brain, Heart, RefreshCw, Award, CheckCircle, AlertTriangle, Lightbulb, Zap, List } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
 import { JournalEntry as DBJournalEntry, getJournalEntry, createOrUpdateJournalEntry } from '../../lib/supabase';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import JournalEntryList from '../components/JournalEntryList';
 
 // Journal entry types
 type JournalEntryType = 'daily' | 'cbt' | 'gratitude' | 'milestone' | 'relapse_prevention' | 'custom';
@@ -23,12 +25,14 @@ type JournalEntriesUI = {
 
 export default function JournalScreen() {
   const { user, profile } = useAuth();
+  const router = useRouter();
+  const params = useLocalSearchParams();
   
   // Current date and view state
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [viewType, setViewType] = useState<'calendar' | 'entry'>('calendar');
+  const [viewType, setViewType] = useState<'calendar' | 'entry' | 'list' | 'detail'>('calendar');
   const [entryType, setEntryType] = useState<JournalEntryType>('daily');
   
   // Journal entry state
@@ -51,6 +55,19 @@ export default function JournalScreen() {
   
   // Journal entries state
   const [journalEntries, setJournalEntries] = useState<JournalEntriesUI>({});
+  
+  // Check for date parameter from entry list
+  useEffect(() => {
+    if (params.date) {
+      const dateParam = params.date as string;
+      const dateObj = new Date(dateParam);
+      setSelectedDate(dateObj);
+      setCurrentMonth(dateObj.getMonth());
+      setCurrentYear(dateObj.getFullYear());
+      loadEntry(dateParam);
+      setViewType('entry');
+    }
+  }, [params.date]);
   
   // Common emotions for addiction recovery
   const commonEmotions = [
@@ -201,10 +218,18 @@ export default function JournalScreen() {
     const fullDate = new Date(currentYear, currentMonth, day.day);
     setSelectedDate(fullDate);
     
-    // Load entry data for the selected date
-    await loadEntry(day.dateString);
+    // Check if there's an entry for this date
+    const journalEntry = journalEntries[day.dateString];
     
-    setViewType('entry');
+    if (journalEntry && journalEntry.hasEntry) {
+      // Load entry data for viewing
+      await loadEntry(day.dateString);
+      setViewType('detail');
+    } else {
+      // Reset form for new entry
+      resetForm();
+      setViewType('entry');
+    }
   };
   
   // Toggle selection functions
@@ -280,6 +305,24 @@ export default function JournalScreen() {
   // Calendar view
   const renderCalendarView = () => (
     <>
+      <View style={styles.viewToggle}>
+        <Pressable 
+          style={[styles.viewToggleButton, styles.viewToggleButtonActive]} 
+          onPress={() => setViewType('calendar')}
+        >
+          <Calendar size={18} color="#3D56F0" />
+          <Text style={[styles.viewToggleText, styles.viewToggleTextActive]}>Calendar</Text>
+        </Pressable>
+        
+        <Pressable 
+          style={styles.viewToggleButton} 
+          onPress={() => setViewType('list')}
+        >
+          <List size={18} color="#6B7280" />
+          <Text style={styles.viewToggleText}>List View</Text>
+        </Pressable>
+      </View>
+    
       <View style={styles.monthSelector}>
         <Pressable style={styles.monthButton} onPress={() => changeMonth(-1)}>
           <ChevronLeft size={24} color="#4B5563" />
@@ -294,42 +337,18 @@ export default function JournalScreen() {
         </Pressable>
       </View>
       
-      <View style={styles.weekdayHeader}>
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
-          <Text key={index} style={styles.weekdayText}>{day}</Text>
+      <View style={styles.calendarHeader}>
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+          <Text key={day} style={styles.calendarHeaderText}>{day}</Text>
         ))}
       </View>
       
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3D56F0" />
-          <Text style={styles.loadingText}>Loading entries...</Text>
-        </View>
-      ) : (
-        <View style={styles.calendarGrid}>
-          {generateCalendarDays()}
-        </View>
-      )}
-      
-      <View style={styles.legendContainer}>
-        <Text style={styles.legendTitle}>Entry Types:</Text>
-        <View style={styles.legendItems}>
-          {entryTypeOptions.map(option => (
-            <View key={option.type} style={styles.legendItem}>
-              <View 
-                style={[
-                  styles.legendDot, 
-                  { backgroundColor: getEntryTypeColor(option.type) }
-                ]} 
-              />
-              <Text style={styles.legendText}>{option.name}</Text>
-            </View>
-          ))}
-        </View>
+      <View style={styles.calendarGrid}>
+        {generateCalendarDays()}
       </View>
       
-      <Pressable
-        style={styles.newEntryButton}
+      <Pressable 
+        style={styles.createEntryButton}
         onPress={() => {
           setSelectedDate(new Date());
           resetForm();
@@ -337,22 +356,33 @@ export default function JournalScreen() {
         }}
       >
         <LinearGradient
-          colors={['#3D56F0', '#5B73FF']}
-          style={StyleSheet.absoluteFill}
+          colors={['#3D56F0', '#5E72EB']}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        />
-        <Plus size={20} color="#FFFFFF" style={styles.newEntryIcon} />
-        <Text style={styles.newEntryText}>New Entry</Text>
+          end={{ x: 1, y: 0 }}
+          style={styles.gradientButton}
+        >
+          <PenSquare size={20} color="#FFFFFF" />
+          <Text style={styles.createEntryButtonText}>New Entry</Text>
+        </LinearGradient>
       </Pressable>
       
-      <View style={styles.insightsCard}>
-        <View style={styles.insightsHeader}>
-          <BookOpen size={18} color="#3D56F0" />
-          <Text style={styles.insightsTitle}>Journal Insights</Text>
+      <View style={styles.moodLegend}>
+        <Text style={styles.moodLegendTitle}>Mood Legend</Text>
+        <View style={styles.moodLegendContainer}>
+          {[1, 2, 3, 4, 5].map(mood => (
+            <View key={mood} style={styles.moodLegendItem}>
+              <View 
+                style={[
+                  styles.moodLegendDot, 
+                  { backgroundColor: getMoodColor(mood) }
+                ]} 
+              />
+              <Text style={styles.moodLegendText}>
+                {['Very Low', 'Low', 'Neutral', 'Good', 'Excellent'][mood - 1]}
+              </Text>
+            </View>
+          ))}
         </View>
-        
-        {renderJournalInsights()}
       </View>
     </>
   );
@@ -380,6 +410,19 @@ export default function JournalScreen() {
       }
     });
     
+    // Calculate average mood
+    let totalMood = 0;
+    let moodEntryCount = 0;
+    
+    Object.values(journalEntries).forEach(entry => {
+      if (entry.hasEntry && entry.mood) {
+        totalMood += entry.mood;
+        moodEntryCount++;
+      }
+    });
+    
+    const averageMood = moodEntryCount > 0 ? (totalMood / moodEntryCount).toFixed(1) : '0.0';
+    
     // Count urges recorded
     const urgesRecorded = Object.values(journalEntries).filter(entry => entry.hadUrge).length;
     
@@ -392,12 +435,26 @@ export default function JournalScreen() {
         {entriesThisMonth > 0 && (
           <>
             <Text style={styles.insightsStat}>
+              Average mood: <Text style={styles.insightsHighlight}>{averageMood}</Text>
+              <Text style={styles.insightsMoodScale}> (on scale of 1-5)</Text>
+            </Text>
+            
+            <Text style={styles.insightsStat}>
               Most common mood: <Text style={styles.insightsHighlight}>{getMoodLabel(mostCommonMood)}</Text>
             </Text>
             
             <Text style={styles.insightsStat}>
               <Text style={styles.insightsHighlight}>{urgesRecorded}</Text> urges recorded
             </Text>
+            
+            <View style={styles.moodScaleExplanation}>
+              <Text style={styles.moodScaleTitle}>Mood Scale Explained:</Text>
+              <Text style={styles.moodScaleItem}>1 - Very Low</Text>
+              <Text style={styles.moodScaleItem}>2 - Low</Text>
+              <Text style={styles.moodScaleItem}>3 - Neutral</Text>
+              <Text style={styles.moodScaleItem}>4 - Good</Text>
+              <Text style={styles.moodScaleItem}>5 - Excellent</Text>
+            </View>
             
             <View style={styles.insightsTip}>
               <Lightbulb size={14} color="#3D56F0" />
@@ -1093,15 +1150,176 @@ export default function JournalScreen() {
     setRecoveryWins('');
   };
   
+  // Add a detailed view for journal entries
+  const renderDetailView = () => {
+    // Get current entry data
+    const dateString = selectedDate.toISOString().split('T')[0];
+    const entry = journalEntries[dateString];
+    if (!entry) return null;
+    
+    return (
+      <>
+        <View style={styles.detailHeader}>
+          <Pressable style={styles.backButton} onPress={() => setViewType('calendar')}>
+            <ArrowLeft size={20} color="#4B5563" />
+          </Pressable>
+          
+          <Text style={styles.detailDate}>
+            {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+          </Text>
+          
+          <Pressable style={styles.editButton} onPress={() => setViewType('entry')}>
+            <PenSquare size={18} color="#3D56F0" />
+          </Pressable>
+        </View>
+        
+        <View style={styles.detailCard}>
+          {/* Entry type badge */}
+          <View style={[styles.entryTypeBadge, { backgroundColor: getEntryTypeColor(entryType) + '20' }]}>
+            <Text style={[styles.entryTypeBadgeText, { color: getEntryTypeColor(entryType) }]}>
+              {entryTypeOptions.find(o => o.type === entryType)?.name || 'Journal Entry'}
+            </Text>
+          </View>
+        
+          {/* Mood display */}
+          <View style={styles.detailMoodContainer}>
+            <Text style={styles.detailSectionTitle}>Mood</Text>
+            <View style={styles.detailMoodDisplay}>
+              <View 
+                style={[
+                  styles.detailMoodBubble, 
+                  { backgroundColor: getMoodColor(moodRating) }
+                ]}
+              >
+                <Text style={styles.detailMoodEmoji}>{getMoodEmoji(moodRating)}</Text>
+              </View>
+              <View style={styles.detailMoodInfo}>
+                <Text style={styles.detailMoodLabel}>{getMoodLabel(moodRating)}</Text>
+                <Text style={styles.detailMoodScale}>
+                  On a scale of 1-5, where 1 is very low and 5 is excellent
+                </Text>
+              </View>
+            </View>
+          </View>
+          
+          {/* Main journal content */}
+          {journalText && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Journal Entry</Text>
+              <Text style={styles.detailText}>{journalText}</Text>
+            </View>
+          )}
+          
+          {/* Emotions */}
+          {emotions.length > 0 && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Emotions</Text>
+              <View style={styles.detailTagsContainer}>
+                {emotions.map((emotion, index) => (
+                  <View key={index} style={styles.detailTag}>
+                    <Text style={styles.detailTagText}>{emotion}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          
+          {/* Triggers */}
+          {selectedTriggers.length > 0 && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Triggers</Text>
+              <View style={styles.detailTagsContainer}>
+                {selectedTriggers.map((trigger, index) => (
+                  <View key={index} style={styles.detailTag}>
+                    <Text style={styles.detailTagText}>{trigger}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          
+          {/* Thoughts */}
+          {thoughts.length > 0 && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Thoughts</Text>
+              <View style={styles.detailTagsContainer}>
+                {thoughts.map((thought, index) => (
+                  <View key={index} style={styles.detailTag}>
+                    <Text style={styles.detailTagText}>{thought}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          
+          {/* Coping Strategies */}
+          {copingStrategies.length > 0 && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Coping Strategies</Text>
+              <View style={styles.detailTagsContainer}>
+                {copingStrategies.map((strategy, index) => (
+                  <View key={index} style={[styles.detailTag, styles.strategyTag]}>
+                    <Text style={styles.detailTagText}>{strategy}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          
+          {/* Gratitude Items (for gratitude entries) */}
+          {entryType === 'gratitude' && gratitudeItems.filter(item => item?.trim()).length > 0 && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Gratitude</Text>
+              {gratitudeItems.filter(item => item?.trim()).map((item, index) => (
+                <View key={index} style={styles.detailListItem}>
+                  <Text style={styles.detailListNumber}>{index + 1}.</Text>
+                  <Text style={styles.detailListText}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+          
+          {/* Recovery Wins (for milestone entries) */}
+          {entryType === 'milestone' && recoveryWins && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Recovery Wins</Text>
+              <Text style={styles.detailText}>{recoveryWins}</Text>
+            </View>
+          )}
+          
+          {/* Lessons Learned */}
+          {lessonsLearned && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Lessons Learned</Text>
+              <Text style={styles.detailText}>{lessonsLearned}</Text>
+            </View>
+          )}
+        </View>
+      </>
+    );
+  };
+  
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Journal</Text>
-        <Text style={styles.subtitle}>Record your thoughts and feelings</Text>
-      </View>
-      
-      {viewType === 'calendar' ? renderCalendarView() : renderEntryView()}
-    </ScrollView>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <BookOpen size={24} color="#3D56F0" />
+          <Text style={styles.title}>Journal</Text>
+        </View>
+        
+        {viewType === 'calendar' && renderCalendarView()}
+        {viewType === 'list' && <JournalEntryList />}
+        {viewType === 'entry' && renderEntryView()}
+        {viewType === 'detail' && renderDetailView()}
+        
+        {viewType === 'calendar' && (
+          <View style={styles.insightsSection}>
+            <Text style={styles.insightsTitle}>Insights</Text>
+            {renderJournalInsights()}
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -1155,10 +1373,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  scrollContent: {
+    paddingBottom: 40,
+  },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   title: {
     fontSize: 28,
@@ -1170,6 +1391,39 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
     marginTop: 4,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    padding: 4,
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+  viewToggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  viewToggleButtonActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  viewToggleText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: '#6B7280',
+    marginLeft: 6,
+  },
+  viewToggleTextActive: {
+    color: '#3D56F0',
   },
   monthSelector: {
     flexDirection: 'row',
@@ -1191,12 +1445,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: '#1F2937',
   },
-  weekdayHeader: {
+  calendarHeader: {
     flexDirection: 'row',
     paddingHorizontal: 20,
     marginBottom: 8,
   },
-  weekdayText: {
+  calendarHeaderText: {
     flex: 1,
     textAlign: 'center',
     fontSize: 12,
@@ -1246,49 +1500,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginLeft: 8,
   },
-  loadingContainer: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#6B7280',
-  },
-  legendContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  legendTitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#4B5563',
-    marginBottom: 8,
-  },
-  legendItems: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 12,
-    marginBottom: 8,
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 4,
-  },
-  legendText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#4B5563',
-  },
-  newEntryButton: {
+  createEntryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1298,61 +1510,50 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     overflow: 'hidden',
   },
-  newEntryIcon: {
-    marginRight: 8,
+  gradientButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  newEntryText: {
+  createEntryButtonText: {
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     color: '#FFFFFF',
-  },
-  insightsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 20,
-    marginBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  insightsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  insightsTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1F2937',
     marginLeft: 8,
   },
-  insightsStat: {
+  moodLegend: {
+    padding: 20,
+    marginBottom: 20,
+  },
+  moodLegendTitle: {
     fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'Inter-Medium',
     color: '#4B5563',
     marginBottom: 8,
   },
-  insightsHighlight: {
-    color: '#3D56F0',
-    fontFamily: 'Inter-SemiBold',
+  moodLegendContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
-  insightsTip: {
+  moodLegendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EBF5FF',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 8,
+    marginRight: 12,
+    marginBottom: 8,
   },
-  insightsTipText: {
-    marginLeft: 8,
+  moodLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  moodLegendText: {
     fontSize: 12,
     fontFamily: 'Inter-Regular',
-    color: '#3D56F0',
-    flex: 1,
+    color: '#4B5563',
   },
   entryHeader: {
     flexDirection: 'row',
@@ -1567,5 +1768,195 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
     paddingVertical: 16,
+  },
+  entryFormActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+  },
+  cancelButton: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
+    color: '#4B5563',
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  detailDate: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  editButton: {
+    padding: 8,
+  },
+  detailCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  entryTypeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100,
+    marginBottom: 16,
+  },
+  entryTypeBadgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  detailMoodContainer: {
+    marginBottom: 20,
+  },
+  detailSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 10,
+  },
+  detailMoodDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailMoodBubble: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  detailMoodEmoji: {
+    fontSize: 24,
+  },
+  detailMoodInfo: {
+    flex: 1,
+  },
+  detailMoodLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  detailMoodScale: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  detailSection: {
+    marginBottom: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  detailText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#374151',
+  },
+  detailTagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  detailTag: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 100,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  strategyTag: {
+    backgroundColor: '#EBF5FF',
+  },
+  detailTagText: {
+    fontSize: 14,
+    color: '#4B5563',
+  },
+  detailListItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  detailListNumber: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3D56F0',
+    width: 24,
+  },
+  detailListText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#374151',
+    flex: 1,
+  },
+  insightsSection: {
+    padding: 20,
+    marginBottom: 20,
+  },
+  insightsTitle: {
+    fontSize: 18,
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  insightsStat: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  insightsHighlight: {
+    fontFamily: 'Inter-SemiBold',
+    color: '#1F2937',
+  },
+  insightsTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  insightsTipText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    marginLeft: 8,
+  },
+  insightsMoodScale: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: '#9CA3AF',
+  },
+  moodScaleExplanation: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+  },
+  moodScaleTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4B5563',
+    marginBottom: 6,
+  },
+  moodScaleItem: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 4,
   },
 }); 

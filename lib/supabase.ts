@@ -163,6 +163,42 @@ export async function getTodaysUrges(userId: string): Promise<Urge[]> {
   return data as Urge[];
 }
 
+export async function getAllUrges(userId: string): Promise<Urge[]> {
+  const { data, error } = await supabase
+    .from('urges')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    console.error('Error fetching all urges:', error);
+    return [];
+  }
+  
+  return data as Urge[];
+}
+
+export async function getUrgesByDateRange(
+  userId: string, 
+  startDate: string, 
+  endDate: string
+): Promise<Urge[]> {
+  const { data, error } = await supabase
+    .from('urges')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('created_at', `${startDate}T00:00:00`)
+    .lte('created_at', `${endDate}T23:59:59`)
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    console.error('Error fetching urges by date range:', error);
+    return [];
+  }
+  
+  return data as Urge[];
+}
+
 export async function createUrge(userId: string, urgeData: Omit<Urge, 'id' | 'user_id' | 'created_at'>) {
   const { error } = await supabase
     .from('urges')
@@ -173,6 +209,119 @@ export async function createUrge(userId: string, urgeData: Omit<Urge, 'id' | 'us
   
   if (error) {
     console.error('Error creating urge:', error);
+    throw error;
+  }
+}
+
+export async function updateUrge(urgeId: string, updates: Partial<Omit<Urge, 'id' | 'user_id' | 'created_at'>>) {
+  const { error } = await supabase
+    .from('urges')
+    .update(updates)
+    .eq('id', urgeId);
+  
+  if (error) {
+    console.error('Error updating urge:', error);
+    throw error;
+  }
+}
+
+export async function deleteUrge(urgeId: string) {
+  const { error } = await supabase
+    .from('urges')
+    .delete()
+    .eq('id', urgeId);
+  
+  if (error) {
+    console.error('Error deleting urge:', error);
+    throw error;
+  }
+}
+
+export async function getUrgeStats(userId: string) {
+  // We'll use custom queries to calculate urge statistics
+  // For now, let's just get the data and calculate in the client
+  
+  try {
+    const urges = await getAllUrges(userId);
+    
+    // Total urges
+    const totalUrges = urges.length;
+    
+    // Overcome vs relapsed
+    const overcomeTimes = urges.filter(urge => urge.overcome).length;
+    const relapseTimes = totalUrges - overcomeTimes;
+    
+    // Success rate
+    const successRate = totalUrges > 0 ? Math.round((overcomeTimes / totalUrges) * 100) : 0;
+    
+    // Average intensity
+    const avgIntensity = totalUrges > 0 
+      ? urges.reduce((sum, urge) => sum + urge.intensity, 0) / totalUrges 
+      : 0;
+    
+    // Common triggers
+    const triggerCounts: Record<string, number> = {};
+    urges.forEach(urge => {
+      if (urge.trigger) {
+        triggerCounts[urge.trigger] = (triggerCounts[urge.trigger] || 0) + 1;
+      }
+    });
+    
+    const sortedTriggers = Object.entries(triggerCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([trigger, count]) => ({ trigger, count }));
+    
+    // Common locations
+    const locationCounts: Record<string, number> = {};
+    urges.forEach(urge => {
+      if (urge.location) {
+        locationCounts[urge.location] = (locationCounts[urge.location] || 0) + 1;
+      }
+    });
+    
+    const sortedLocations = Object.entries(locationCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([location, count]) => ({ location, count }));
+    
+    // Time of day patterns
+    const hourCounts: Record<number, number> = {};
+    urges.forEach(urge => {
+      const date = new Date(urge.created_at);
+      const hour = date.getHours();
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    });
+    
+    const hourlyDistribution = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      count: hourCounts[hour] || 0
+    }));
+    
+    // Weekly patterns
+    const dayCounts: Record<number, number> = {};
+    urges.forEach(urge => {
+      const date = new Date(urge.created_at);
+      const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+      dayCounts[day] = (dayCounts[day] || 0) + 1;
+    });
+    
+    const dayDistribution = Array.from({ length: 7 }, (_, day) => ({
+      day,
+      count: dayCounts[day] || 0
+    }));
+    
+    return {
+      totalUrges,
+      overcomeTimes,
+      relapseTimes,
+      successRate,
+      avgIntensity,
+      commonTriggers: sortedTriggers.slice(0, 5),
+      commonLocations: sortedLocations.slice(0, 5),
+      hourlyDistribution,
+      dayDistribution
+    };
+  } catch (error) {
+    console.error('Error calculating urge stats:', error);
     throw error;
   }
 }
@@ -211,6 +360,21 @@ export async function getJournalEntry(userId: string, date: string): Promise<Jou
   }
   
   return data as JournalEntry;
+}
+
+export async function getAllJournalEntries(userId: string): Promise<JournalEntry[]> {
+  const { data, error } = await supabase
+    .from('journal_entries')
+    .select('*')
+    .eq('user_id', userId)
+    .order('date', { ascending: false });
+  
+  if (error) {
+    console.error('Error fetching journal entries:', error);
+    return [];
+  }
+  
+  return data as JournalEntry[];
 }
 
 export async function createOrUpdateJournalEntry(
