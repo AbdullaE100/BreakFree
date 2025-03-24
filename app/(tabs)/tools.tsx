@@ -210,31 +210,6 @@ export default function ToolsScreen() {
           </Pressable>
         ))}
       </View>
-      
-      {/* Support Groups */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Community Support</Text>
-      </View>
-      
-      <View style={styles.supportCard}>
-        <View style={styles.supportImageContainer}>
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1573497161161-c3e73707e25c?q=80&w=200&auto=format&fit=crop' }}
-            style={styles.supportImage}
-          />
-        </View>
-        
-        <View style={styles.supportContent}>
-          <Text style={styles.supportTitle}>Join a Support Group</Text>
-          <Text style={styles.supportDescription}>
-            Connect with others on the same journey in a safe, anonymous environment
-          </Text>
-          
-          <Pressable style={styles.supportButton}>
-            <Text style={styles.supportButtonText}>Find Groups</Text>
-          </Pressable>
-        </View>
-      </View>
     </ScrollView>
   );
 }
@@ -482,52 +457,5 @@ const styles = StyleSheet.create({
   cbtTechniqueCompleted: {
     textDecorationLine: 'line-through',
     color: '#9CA3AF',
-  },
-  supportCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginHorizontal: 20,
-    marginBottom: 32,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  supportImageContainer: {
-    height: 140,
-    width: '100%',
-  },
-  supportImage: {
-    width: '100%',
-    height: '100%',
-  },
-  supportContent: {
-    padding: 20,
-  },
-  supportTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  supportDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#4B5563',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  supportButton: {
-    backgroundColor: '#3D56F0',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  supportButtonText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#FFFFFF',
   },
 }); 

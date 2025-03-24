@@ -1,6 +1,8 @@
 import { Tabs } from 'expo-router';
 import { Home, User, BookOpen, Shield, Activity, BarChart2 } from 'lucide-react-native';
-import { View, StyleSheet } from 'react-native';
+import { Dimensions, Platform } from 'react-native';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 export default function TabLayout() {
   return (
@@ -9,49 +11,28 @@ export default function TabLayout() {
         tabBarActiveTintColor: '#3D56F0',
         tabBarInactiveTintColor: '#6B7280',
         tabBarStyle: {
+          backgroundColor: '#FFFFFF',
           borderTopWidth: 1,
           borderTopColor: '#E5E7EB',
-          height: 80,
-          paddingBottom: 16,
-          paddingTop: 8,
+          height: Platform.OS === 'ios' ? 80 : 60,
+          paddingBottom: Platform.OS === 'ios' ? 25 : 5,
+          paddingHorizontal: Platform.OS === 'ios' ? 10 : 0,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
+          fontSize: 10,
+          fontFamily: 'Inter-Medium',
+          marginBottom: Platform.OS === 'ios' ? 8 : 0,
         },
         tabBarIconStyle: {
-          marginBottom: 4,
+          marginTop: Platform.OS === 'ios' ? 5 : 0,
         },
         headerShown: false,
+        tabBarItemStyle: {
+          paddingHorizontal: Platform.OS === 'ios' ? 8 : 0,
+        },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <Home size={24} color={color} />,
-          tabBarButton: () => <View style={styles.hiddenTab} />
-        }}
-      />
-      
-      <Tabs.Screen
-        name="checkin"
-        options={{
-          title: 'Check-In',
-          tabBarIcon: ({ color }) => <BookOpen size={24} color={color} />,
-          tabBarButton: () => <View style={styles.hiddenTab} />
-        }}
-      />
-      
-      <Tabs.Screen
-        name="progress"
-        options={{
-          title: 'Progress',
-          tabBarIcon: ({ color }) => <Activity size={24} color={color} />,
-          tabBarButton: () => <View style={styles.hiddenTab} />
-        }}
-      />
-      
+      {/* Visible tabs */}
       <Tabs.Screen
         name="home"
         options={{
@@ -71,7 +52,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="urge-tracker"
         options={{
-          title: 'Track Urge',
+          title: 'Track',
           tabBarIcon: ({ color }) => <Activity size={24} color={color} />,
         }}
       />
@@ -99,14 +80,49 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <User size={24} color={color} />,
         }}
       />
+
+      {/* Hidden screens */}
+      <Tabs.Screen
+        name="index"
+        options={{
+          tabBarButton: () => null,
+        }}
+      />
+      
+      <Tabs.Screen
+        name="checkin"
+        options={{
+          tabBarButton: () => null,
+        }}
+      />
+      
+      <Tabs.Screen
+        name="progress"
+        options={{
+          tabBarButton: () => null,
+        }}
+      />
+      
+      <Tabs.Screen
+        name="settings"
+        options={{
+          tabBarButton: () => null,
+        }}
+      />
+      
+      <Tabs.Screen
+        name="community"
+        options={{
+          tabBarButton: () => null,
+        }}
+      />
+      
+      <Tabs.Screen
+        name="milestones"
+        options={{
+          tabBarButton: () => null,
+        }}
+      />
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  hiddenTab: {
-    display: 'none',
-    width: 0,
-    height: 0,
-  },
-});
